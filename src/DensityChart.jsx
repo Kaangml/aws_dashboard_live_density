@@ -9,6 +9,7 @@ import {
     ResponsiveContainer,
     ReferenceLine
 } from 'recharts';
+import { useState } from 'react';
 
 // Custom Tooltip Component
 const CustomTooltip = ({ active, payload, label }) => {
@@ -38,19 +39,75 @@ const CustomTooltip = ({ active, payload, label }) => {
 
 // Density Chart Component
 export const DensityChart = ({ hourlyData }) => {
-    // Transform data for Recharts - handle both 'hour' and 'data_hour_slot' keys
-    const chartData = hourlyData.map(d => ({
-        hour: d.hour ?? d.data_hour_slot,
-        'Anlık Yoğunluk': d.live_density,
-        'Normal Yoğunluk': d.non_live_density
-    }));
+    const [viewMode, setViewMode] = useState('full'); // 'full', 'weekday', 'weekend'
+
+    // Check if we have weekday/weekend data
+    const hasWeekdayData = hourlyData && hourlyData[0] && hourlyData[0].live_weekday !== undefined;
+
+    // Transform data for Recharts based on view mode
+    const chartData = hourlyData.map(d => {
+        let liveValue, normalValue;
+
+        if (viewMode === 'weekday') {
+            liveValue = d.live_weekday;
+            normalValue = d.non_live_weekday;
+        } else if (viewMode === 'weekend') {
+            liveValue = d.live_weekend;
+            normalValue = d.non_live_weekend;
+        } else {
+            liveValue = d.live_density;
+            normalValue = d.non_live_density;
+        }
+
+        return {
+            hour: d.hour ?? d.data_hour_slot,
+            'Canlı Yoğunluk': liveValue,
+            'Normal Yoğunluk': normalValue,
+        };
+    });
+
+    const viewModeLabels = {
+        'full': 'Full',
+        'weekday': 'Hafta İçi',
+        'weekend': 'Hafta Sonu'
+    };
 
     return (
         <div className="w-full">
-            {/* Chart Title */}
-            <div className="mb-4">
-                <h3 className="text-lg font-semibold text-gray-800">Saatlik Yoğunluk Analizi</h3>
-                <p className="text-sm text-gray-500">Anlık ve normal yoğunluk değerlerinin karşılaştırması</p>
+            {/* Chart Title & Controls */}
+            <div className="mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div>
+                    <h3 className="text-lg font-semibold text-gray-800">Saatlik Yoğunluk Analizi</h3>
+                    <p className="text-sm text-gray-500">
+                        {viewMode === 'weekday' ? 'Pazartesi - Perşembe ortalaması' :
+                            viewMode === 'weekend' ? 'Cuma - Cumartesi - Pazar ortalaması' :
+                                'Tüm günler ortalaması'}
+                    </p>
+                </div>
+
+                <div className="flex items-center gap-2 flex-wrap">
+                    {/* View Mode Buttons */}
+                    {hasWeekdayData && (
+                        <div className="flex rounded-lg overflow-hidden border border-gray-200">
+                            {['full', 'weekday', 'weekend'].map((mode) => (
+                                <button
+                                    key={mode}
+                                    onClick={() => setViewMode(mode)}
+                                    className={`px-3 py-1.5 text-xs font-medium transition-colors ${viewMode === mode
+                                        ? mode === 'weekend'
+                                            ? 'bg-orange-500 text-white'
+                                            : mode === 'weekday'
+                                                ? 'bg-blue-500 text-white'
+                                                : 'bg-gray-700 text-white'
+                                        : 'bg-white text-gray-600 hover:bg-gray-50'
+                                        }`}
+                                >
+                                    {viewModeLabels[mode]}
+                                </button>
+                            ))}
+                        </div>
+                    )}
+                </div>
             </div>
 
             {/* Chart Container */}
@@ -109,7 +166,7 @@ export const DensityChart = ({ hourlyData }) => {
                         {/* Live Density Line - Blue, Solid */}
                         <Line
                             type="monotone"
-                            dataKey="Anlık Yoğunluk"
+                            dataKey="Canlı Yoğunluk"
                             stroke="#3b82f6"
                             strokeWidth={3}
                             dot={{ fill: '#3b82f6', r: 4 }}
@@ -124,11 +181,11 @@ export const DensityChart = ({ hourlyData }) => {
             <div className="mt-4 flex flex-wrap gap-4 text-sm text-gray-600">
                 <div className="flex items-center gap-2">
                     <div className="w-8 h-0.5 bg-gray-400" style={{ backgroundImage: 'repeating-linear-gradient(90deg, #9ca3af, #9ca3af 5px, transparent 5px, transparent 10px)' }}></div>
-                    <span>Normal: Geçmiş ortalama yoğunluk</span>
+                    <span>Normal: {viewMode === 'weekday' ? 'Hafta içi' : viewMode === 'weekend' ? 'Hafta sonu' : 'Genel'} ortalama</span>
                 </div>
                 <div className="flex items-center gap-2">
                     <div className="w-8 h-1 bg-blue-500 rounded"></div>
-                    <span>Anlık: Gerçek zamanlı yoğunluk</span>
+                    <span>Canlı: {viewMode === 'weekday' ? 'Hafta içi' : viewMode === 'weekend' ? 'Hafta sonu' : 'Genel'} canlı ort.</span>
                 </div>
             </div>
         </div>

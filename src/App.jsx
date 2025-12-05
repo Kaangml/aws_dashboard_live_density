@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
-import { BarChart3, RefreshCw, Database, Loader2 } from 'lucide-react';
+import { BarChart3, RefreshCw, Database, Loader2, Users, Wine, Building2, Store, ShoppingBag } from 'lucide-react';
 import { VenueCard, VenueModal, SearchBar } from './components';
 import { DensityChart } from './DensityChart';
 
@@ -16,11 +16,22 @@ const loadDashboardData = async () => {
   }
 };
 
-// Veri filtreleme fonksiyonu
-const filterVenues = (venues, searchTerm) => {
-  if (!searchTerm.trim()) return venues;
-  const term = searchTerm.toLowerCase();
-  return venues.filter(v => v.name.toLowerCase().includes(term));
+// Veri filtreleme fonksiyonu - kanal ve arama dahil
+const filterVenues = (venues, searchTerm, channelFilter) => {
+  let filtered = venues;
+
+  // Kanal filtresi
+  if (channelFilter !== 'all') {
+    filtered = filtered.filter(v => v.channel === channelFilter);
+  }
+
+  // Arama filtresi
+  if (searchTerm.trim()) {
+    const term = searchTerm.toLowerCase();
+    filtered = filtered.filter(v => v.name.toLowerCase().includes(term));
+  }
+
+  return filtered;
 };
 
 function App() {
@@ -29,6 +40,7 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedVenue, setSelectedVenue] = useState(null);
+  const [channelFilter, setChannelFilter] = useState('all'); // 'all', 'Açık Kanal', 'Kapalı Kanal'
 
   // Veriyi yükle
   useEffect(() => {
@@ -38,10 +50,17 @@ function App() {
     });
   }, []);
 
-  // Filtered venues based on search
+  // Filtered venues based on search and channel
   const filteredVenues = useMemo(() => {
-    return filterVenues(venues, searchTerm);
-  }, [venues, searchTerm]);
+    return filterVenues(venues, searchTerm, channelFilter);
+  }, [venues, searchTerm, channelFilter]);
+
+  // Channel counts
+  const channelCounts = useMemo(() => {
+    const acik = venues.filter(v => v.channel === 'Açık Kanal').length;
+    const kapali = venues.filter(v => v.channel === 'Kapalı Kanal').length;
+    return { acik, kapali, total: venues.length };
+  }, [venues]);
 
   // Reload data
   const handleRefresh = async () => {
@@ -54,11 +73,37 @@ function App() {
 
   // Stats for header
   const stats = useMemo(() => {
-    if (venues.length === 0) return { highOpportunityCount: 0, avgScore: 0, totalVolume: 0 };
+    if (venues.length === 0) return {
+      highOpportunityCount: 0, avgScore: 0, totalVolume: 0,
+      totalDailyVisitors: 0, avgKuver: 0, venuesWithVisitors: 0,
+      totalMonthlyAlcohol: 0, avgRakip: 0, venuesWithAlcohol: 0
+    };
     const highOpportunityCount = venues.filter(v => v.isHighOpportunity).length;
     const avgScore = (venues.reduce((sum, v) => sum + v.score, 0) / venues.length).toFixed(1);
     const totalVolume = venues.reduce((sum, v) => sum + v.volumeForecast, 0);
-    return { highOpportunityCount, avgScore, totalVolume };
+
+    // Visitor stats
+    const venuesWithVisitors = venues.filter(v => v.dailyVisitorsLive !== undefined);
+    const totalDailyVisitors = venuesWithVisitors.reduce((sum, v) => sum + (v.dailyVisitorsLive || 0), 0);
+    const avgKuver = venuesWithVisitors.length > 0
+      ? Math.round(venuesWithVisitors.reduce((sum, v) => sum + (v.kuver || v.kuverNew || 0), 0) / venuesWithVisitors.length)
+      : 0;
+
+    // Alcohol stats
+    const venuesWithAlcohol = venues.filter(v => v.monthlyAlcoholLive !== undefined);
+    const totalMonthlyAlcohol = venuesWithAlcohol.reduce((sum, v) => sum + (v.monthlyAlcoholLive || 0), 0);
+
+    // Rakip stats
+    const venuesWithRakip = venues.filter(v => v.rakipToplam100m !== undefined);
+    const avgRakip = venuesWithRakip.length > 0
+      ? Math.round(venuesWithRakip.reduce((sum, v) => sum + (v.rakipToplam100m || 0), 0) / venuesWithRakip.length)
+      : 0;
+
+    return {
+      highOpportunityCount, avgScore, totalVolume,
+      totalDailyVisitors, avgKuver, venuesWithVisitors: venuesWithVisitors.length,
+      totalMonthlyAlcohol, avgRakip, venuesWithAlcohol: venuesWithAlcohol.length
+    };
   }, [venues]);
 
   // Loading state
@@ -90,7 +135,8 @@ function App() {
                   <p className="text-sm text-gray-500">Anlık ve geçmiş yoğunluk analizi</p>
                   <span className="flex items-center gap-1 text-xs text-green-600 bg-green-50 px-2 py-0.5 rounded-full">
                     <Database size={10} />
-                    Gerçek Veri
+                    {/* Gerçek Veri */}
+                    Canlı Data
                   </span>
                 </div>
               </div>
@@ -98,6 +144,42 @@ function App() {
 
             {/* Search & Actions */}
             <div className="flex items-center gap-3">
+              {/* Channel Filter Buttons */}
+              <div className="flex rounded-lg overflow-hidden border border-gray-200">
+                <button
+                  onClick={() => setChannelFilter('all')}
+                  className={`px-3 py-2 text-xs font-medium transition-colors flex items-center gap-1.5 ${channelFilter === 'all'
+                    ? 'bg-gray-700 text-white'
+                    : 'bg-white text-gray-600 hover:bg-gray-50'
+                    }`}
+                >
+                  Tümü
+                  <span className="bg-white/20 px-1.5 rounded text-xs">{channelCounts.total}</span>
+                </button>
+                <button
+                  onClick={() => setChannelFilter('Açık Kanal')}
+                  className={`px-3 py-2 text-xs font-medium transition-colors flex items-center gap-1.5 ${channelFilter === 'Açık Kanal'
+                    ? 'bg-emerald-500 text-white'
+                    : 'bg-white text-gray-600 hover:bg-gray-50'
+                    }`}
+                >
+                  <Store size={14} />
+                  Açık
+                  <span className="bg-white/20 px-1.5 rounded text-xs">{channelCounts.acik}</span>
+                </button>
+                <button
+                  onClick={() => setChannelFilter('Kapalı Kanal')}
+                  className={`px-3 py-2 text-xs font-medium transition-colors flex items-center gap-1.5 ${channelFilter === 'Kapalı Kanal'
+                    ? 'bg-purple-500 text-white'
+                    : 'bg-white text-gray-600 hover:bg-gray-50'
+                    }`}
+                >
+                  <ShoppingBag size={14} />
+                  Kapalı
+                  <span className="bg-white/20 px-1.5 rounded text-xs">{channelCounts.kapali}</span>
+                </button>
+              </div>
+
               <SearchBar value={searchTerm} onChange={setSearchTerm} />
               <button
                 onClick={handleRefresh}
@@ -131,6 +213,37 @@ function App() {
               <span className="text-gray-500">Toplam Hacim:</span>
               <span className="font-semibold text-blue-600">{stats.totalVolume.toLocaleString()} Lt</span>
             </div>
+            {/* Visitor Stats */}
+            {stats.venuesWithVisitors > 0 && (
+              <>
+                <div className="h-4 w-px bg-gray-300"></div>
+                <div className="flex items-center gap-2">
+                  <Users size={14} className="text-emerald-600" />
+                  <span className="text-gray-500">Günlük Ziyaretçi:</span>
+                  <span className="font-semibold text-emerald-600">{stats.totalDailyVisitors.toLocaleString()}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-gray-500">Ort. Kuver:</span>
+                  <span className="font-semibold text-gray-700">{stats.avgKuver}</span>
+                </div>
+              </>
+            )}
+            {/* Alcohol Stats */}
+            {stats.venuesWithAlcohol > 0 && (
+              <>
+                <div className="h-4 w-px bg-gray-300"></div>
+                <div className="flex items-center gap-2">
+                  <Wine size={14} className="text-purple-600" />
+                  <span className="text-gray-500">Aylık Alkol:</span>
+                  <span className="font-semibold text-purple-600">{stats.totalMonthlyAlcohol.toLocaleString()} Lt</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Building2 size={14} className="text-orange-600" />
+                  <span className="text-gray-500">Ort. Rakip (100m):</span>
+                  <span className="font-semibold text-orange-600">{stats.avgRakip}</span>
+                </div>
+              </>
+            )}
           </div>
         </div>
       </div>
